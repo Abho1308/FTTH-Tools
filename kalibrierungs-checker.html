@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<title>Kalibrierungsprotokoll-Checker · Alpen Glasfaser GmbH</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='%2300cfb4'%3E%3Cpath d='M24 1C22.835 1 21.795 1.734 21.148 3.013L1.594 41.656C0.975 42.88 0.974 44.157 1.591 45.161C2.202 46.154 3.324 46.728 4.676 46.741L43.324 46.741C44.676 46.728 45.798 46.154 46.408 45.162C47.025 44.158 47.024 42.88 46.405 41.656L40.114 29.224C39.108 27.235 36.668 25.735 34.437 25.735L34.436 25.735L23.989 25.738C23.014 25.738 22.223 26.53 22.223 27.505C22.224 28.48 23.014 29.271 23.99 29.271L23.99 29.271L34.437 29.267L34.438 29.267C35.332 29.267 36.559 30.021 36.963 30.819L43.232 43.209L4.768 43.209L24 5.201L30.894 18.826C31.205 19.441 31.827 19.795 32.472 19.795C32.74 19.795 33.012 19.734 33.267 19.605C34.138 19.164 34.486 18.102 34.046 17.231L26.852 3.013C26.204 1.734 25.165 1 24 1Z'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#0a2a35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AGF Kalibrier-Check">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --accent: rgb(0,207,180);
+    --ok: #00cfb4;
+    --warn: #f0a04b;
+    --nok: #e05a5a;
+    --bg0: #060d0f;
+    --glass-bg: rgba(255,255,255,0.05);
+    --glass-border: rgba(255,255,255,0.12);
+    --text: #eaf6f4;
+    --text-dim: #9fb6b3;
+    --radius: 16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Syne',sans-serif;color:var(--text);min-height:100vh;
+    background:var(--bg0);position:relative;overflow-x:hidden;line-height:1.45;
+  }
+  /* ---------- Animated background ---------- */
+  .bg-mesh{
+    position:fixed;inset:0;z-index:-3;
+    background:
+      radial-gradient(70% 60% at 2% -8%, rgba(0,207,180,0.45) 0%, rgba(0,207,180,0) 38%),
+      radial-gradient(120% 120% at 85% 30%, #0a2a35 0%, rgba(10,42,53,0) 55%),
+      linear-gradient(160deg, #0a2a35 0%, #060d0f 100%);
+    background-size:180% 180%;
+    animation:meshMove 24s ease-in-out infinite;
+  }
+  @keyframes meshMove{
+    0%{background-position:0% 0%,100% 0%,0% 0%;}
+    50%{background-position:60% 40%,0% 100%,0% 100%;}
+    100%{background-position:0% 0%,100% 0%,0% 0%;}
+  }
+  .orb{position:fixed;border-radius:50%;filter:blur(80px);opacity:0.16;z-index:-2;pointer-events:none;}
+  .orb.a{width:420px;height:420px;background:rgb(0,207,180);top:-90px;left:-90px;animation:float1 18s ease-in-out infinite;}
+  .orb.b{width:520px;height:520px;background:#1fd9c0;bottom:-160px;right:-120px;animation:float2 24s ease-in-out infinite;}
+  .orb.c{width:300px;height:300px;background:#0a6f72;top:40%;left:55%;animation:float1 20s ease-in-out infinite reverse;}
+  @keyframes float1{0%,100%{transform:translate(0,0);}50%{transform:translate(40px,60px);}}
+  @keyframes float2{0%,100%{transform:translate(0,0);}50%{transform:translate(-60px,-40px);}}
+  .bg-grid{
+    position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(0,207,180,0.03) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(0,207,180,0.03) 1px,transparent 1px);
+    background-size:48px 48px;animation:gridDrift 30s linear infinite;
+  }
+  @keyframes gridDrift{0%{background-position:0 0,0 0;}100%{background-position:48px 48px,48px 48px;}}
+
+  /* ---------- Layout ---------- */
+  .wrap{max-width:1180px;margin:0 auto;
+    padding:calc(32px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(80px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));}
+  /* iOS: sauberes Antippen */
+  input,select,.btn,.dim-tab{-webkit-tap-highlight-color:rgba(0,207,180,0.2);}
+  input,select{-webkit-appearance:none;appearance:none;border-radius:10px;}
+  select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%239fb6b3' stroke-width='1.6'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+  header.app-head{margin-bottom:28px;}
+  .brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .logo-mark{
+    width:54px;height:54px;border-radius:14px;flex:0 0 auto;color:var(--accent);
+    background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);
+    display:flex;align-items:center;justify-content:center;box-shadow:0 6px 22px rgba(0,207,180,0.25);
+  }
+  .logo-mark svg{width:38px;height:38px;display:block;}
+  h1{font-size:1.5rem;font-weight:700;margin:0;letter-spacing:-0.5px;}
+  .sub{color:var(--text-dim);font-size:0.9rem;margin-top:2px;}
+  .glass{
+    background:var(--glass-bg);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border:1px solid var(--glass-border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.25);
+  }
+  .card{padding:22px 24px;margin-bottom:22px;}
+  .card h2{font-size:1.05rem;font-weight:600;margin:0 0 16px;display:flex;align-items:center;gap:10px;}
+  .card h2 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);}
+
+  /* Reference panel */
+  .params-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+  .param-pill{background:rgba(0,0,0,0.22);border:1px solid rgba(0,207,180,0.18);border-radius:12px;padding:12px 14px;}
+  .param-pill .label{font-size:0.72rem;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-dim);}
+  .param-pill .val{font-family:'DM Mono',monospace;font-size:0.98rem;margin-top:4px;color:var(--accent);}
+  .param-pill small{display:block;color:var(--text-dim);font-size:0.72rem;margin-top:3px;font-family:'Syne';}
+  .zone-legend{display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+  .zone-row{display:flex;align-items:center;gap:8px;font-size:0.78rem;font-family:'DM Mono';}
+  .zone-chip{width:34px;height:12px;border-radius:4px;flex:0 0 auto;}
+
+  /* Form fields */
+  .grid-2{display:grid;grid-template-columns:1fr;gap:14px;}
+  @media(min-width:760px){.grid-2{grid-template-columns:1fr 1fr;}}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0;}
+  .field label{font-size:0.78rem;color:var(--text-dim);font-weight:500;}
+  input,select{
+    font-family:'DM Mono',monospace;font-size:0.92rem;background:rgba(255,255,255,0.04);
+    border:1px solid var(--glass-border);border-radius:10px;color:var(--text);
+    padding:10px 12px;outline:none;width:100%;transition:border-color .15s, box-shadow .15s;
+  }
+  input::placeholder{color:#6c8481;}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,207,180,0.15);}
+  select{cursor:pointer;}
+  select option{background:#0a2a35;color:var(--text);}
+  /* iOS: Schrift ≥16px verhindert das automatische Hineinzoomen beim Fokussieren */
+  @media(max-width:760px){ input,select{font-size:16px;} }
+
+  /* Dimension tabs */
+  .dim-tabs{display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;}
+  .dim-tab{
+    flex:1;min-width:150px;cursor:pointer;text-align:center;background:rgba(255,255,255,0.04);
+    border:1px solid var(--glass-border);border-radius:12px;padding:14px;font-family:'Syne';
+    font-weight:600;font-size:1rem;transition:all .18s;color:var(--text);
+  }
+  .dim-tab small{display:block;font-weight:400;font-size:0.74rem;color:var(--text-dim);margin-top:4px;font-family:'DM Mono';}
+  .dim-tab:hover{border-color:rgba(0,207,180,0.4);}
+  .dim-tab.active{background:rgba(0,207,180,0.14);border-color:var(--accent);box-shadow:0 0 0 1px var(--accent), 0 6px 22px rgba(0,207,180,0.25);}
+  .dim-tab.active small{color:var(--accent);}
+  .dim-info{margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(0,207,180,0.08);border:1px dashed rgba(0,207,180,0.4);font-size:0.88rem;}
+  .dim-info b{color:var(--accent);font-family:'DM Mono';}
+
+  /* Route cards */
+  .route{padding:18px 20px;margin-bottom:16px;position:relative;border-left:3px solid rgba(0,207,180,0.5);}
+  .route-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+  .route-head .rname{font-weight:600;font-size:0.95rem;}
+  .route-head .rnum{font-family:'DM Mono';color:var(--accent);}
+  .route-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+  @media(min-width:760px){.route-grid{grid-template-columns:repeat(2,1fr);}}
+  @media(min-width:900px){
+    .route-grid{grid-template-columns:repeat(6,1fr);}
+    .route-grid .f-span2{grid-column:span 2;}
+    .route-grid .f-span3{grid-column:span 3;}
+    .route-grid .f-span6{grid-column:span 6;}
+  }
+  .hint{font-size:0.74rem;margin-top:2px;font-family:'Syne';min-height:1em;}
+
+  /* Live visualizer */
+  .viz-panel{display:none;margin-top:16px;padding:16px;border-radius:14px;border:1px solid var(--glass-border);border-left-width:4px;background:rgba(0,0,0,0.2);}
+  .viz-head{font-size:0.78rem;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-dim);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .viz-tiles{display:grid;grid-template-columns:1fr;gap:12px;}
+  @media(min-width:620px){.viz-tiles{grid-template-columns:repeat(3,1fr);}}
+  .viz-tile{padding:14px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);border-top:3px solid var(--text-dim);}
+  .viz-tile .t-cap{font-size:0.72rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-dim);}
+  .viz-tile .t-val{font-family:'DM Mono';font-size:1.5rem;font-weight:500;line-height:1.1;margin-top:6px;}
+  .viz-tile .t-sub{font-size:0.74rem;margin-top:5px;line-height:1.3;}
+  .tile-ok{border-top-color:var(--ok)!important;}.tile-ok .t-val{color:var(--ok);}
+  .tile-warn{border-top-color:var(--warn)!important;}.tile-warn .t-val{color:var(--warn);}
+  .tile-nok{border-top-color:var(--nok)!important;}.tile-nok .t-val{color:var(--nok);}
+
+  .speed-bar-wrap{margin-top:16px;}
+  .speed-bar-scale{display:flex;justify-content:space-between;font-family:'DM Mono';font-size:0.72rem;color:var(--text-dim);margin-bottom:4px;}
+  .speed-bar{position:relative;height:18px;border-radius:9px;background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);overflow:visible;}
+  .speed-fill{height:100%;border-radius:9px 0 0 9px;transition:width .25s ease, background .2s;width:0%;}
+  .fill-ok{background:linear-gradient(90deg,rgba(0,207,180,0.5),var(--ok));}
+  .fill-warn{background:linear-gradient(90deg,rgba(240,160,75,0.5),var(--warn));}
+  .fill-nok{background:linear-gradient(90deg,rgba(224,90,90,0.5),var(--nok));}
+  .marker{position:absolute;top:-7px;transform:translateX(-50%);font-size:0.62rem;font-family:'DM Mono';color:var(--text-dim);text-align:center;line-height:1;}
+  .marker:before{content:'▼';display:block;font-size:0.7rem;color:#cde3e0;}
+  .marker.m50{left:12.5%;}
+  .marker.m150{left:37.5%;}
+  .marker span{display:block;margin-top:14px;}
+  .panel-ok{border-left-color:var(--ok)!important;}
+  .panel-warn{border-left-color:var(--warn)!important;}
+  .panel-nok{border-left-color:var(--nok)!important;}
+
+  /* status border helpers for inputs */
+  .b-ok{border-color:var(--ok)!important;box-shadow:0 0 0 2px rgba(0,207,180,0.22)!important;}
+  .b-warn{border-color:var(--warn)!important;box-shadow:0 0 0 2px rgba(240,160,75,0.22)!important;}
+  .b-nok{border-color:var(--nok)!important;box-shadow:0 0 0 2px rgba(224,90,90,0.28)!important;}
+  .s-ok{color:var(--ok)!important;}.s-warn{color:var(--warn)!important;}.s-nok{color:var(--nok)!important;}
+
+  /* Buttons */
+  .btn{font-family:'Syne';font-weight:600;font-size:0.92rem;cursor:pointer;border-radius:11px;padding:12px 20px;
+    border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);transition:all .15s;display:inline-flex;align-items:center;gap:8px;}
+  .btn:hover{background:rgba(255,255,255,0.1);transform:translateY(-1px);}
+  .btn-primary{background:linear-gradient(135deg,rgb(0,207,180),#06b3a0);color:#04201d;border:none;box-shadow:0 6px 22px rgba(0,207,180,0.4);}
+  .btn-primary:hover{box-shadow:0 8px 28px rgba(0,207,180,0.55);}
+  .btn-ghost-danger{color:var(--nok);border-color:rgba(224,90,90,0.4);background:rgba(224,90,90,0.08);padding:8px 14px;font-size:0.82rem;}
+  .btn-ghost-danger:hover{background:rgba(224,90,90,0.16);}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;}
+
+  /* Result panel */
+  #resultPanel{display:none;}
+  .banner{padding:20px 24px;border-radius:14px;margin-bottom:20px;display:flex;align-items:center;gap:16px;font-size:1.15rem;font-weight:600;}
+  .banner .ico{font-size:1.8rem;}
+  .banner-ok{background:rgba(0,207,180,0.14);border:1px solid var(--ok);color:var(--ok);}
+  .banner-warn{background:rgba(240,160,75,0.14);border:1px solid var(--warn);color:var(--warn);}
+  .banner-nok{background:rgba(224,90,90,0.16);border:1px solid var(--nok);color:var(--nok);}
+  .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:22px;}
+  @media(min-width:760px){.metrics{grid-template-columns:repeat(4,1fr);}}
+  .metric{padding:16px 18px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);}
+  .metric .num{font-family:'DM Mono';font-size:1.9rem;font-weight:500;line-height:1;}
+  .metric .cap{font-size:0.76rem;color:var(--text-dim);margin-top:6px;text-transform:uppercase;letter-spacing:0.5px;}
+  .findings{display:flex;flex-direction:column;gap:10px;}
+  .finding{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);border-left-width:4px;}
+  .finding.f-ok{border-left-color:var(--ok);}.finding.f-warn{border-left-color:var(--warn);}.finding.f-nok{border-left-color:var(--nok);}
+  .badge{flex:0 0 auto;font-family:'DM Mono';font-size:0.7rem;font-weight:500;letter-spacing:0.5px;padding:4px 9px;border-radius:7px;margin-top:1px;text-transform:uppercase;}
+  .badge.f-ok{background:rgba(0,207,180,0.18);color:var(--ok);}
+  .badge.f-warn{background:rgba(240,160,75,0.18);color:var(--warn);}
+  .badge.f-nok{background:rgba(224,90,90,0.2);color:var(--nok);}
+  .finding .body .ftitle{font-weight:600;font-size:0.92rem;}
+  .finding .body .fdetail{font-size:0.84rem;color:var(--text-dim);margin-top:3px;}
+  .finding .body .fdetail b{color:var(--text);font-family:'DM Mono';}
+  .finding .body .froute{font-size:0.72rem;color:var(--accent);font-family:'DM Mono';margin-bottom:2px;}
+  .empty-note{color:var(--text-dim);font-size:0.85rem;font-style:italic;}
+
+  /* Print */
+  @media print{
+    *{ -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+    .bg-mesh,.orb,.bg-grid{display:none!important;}
+    .no-print{display:none!important;}
+    body{background:#fff!important;}
+
+    /* Alle Beschriftungen schwarz für maximale Lesbarkeit */
+    body, h1, .sub, .card h2, .field label, .hint,
+    input, select, select option, .dim-tab, .dim-tab small, .dim-info, .dim-info b,
+    .param-pill, .param-pill .label, .param-pill .val, .param-pill small,
+    .zone-row, .speed-bar-scale, .marker, .marker:before,
+    .rname, .rnum, .viz-head, .t-cap, .t-val, .t-sub,
+    .banner, .metric .num, .metric .cap,
+    .finding .froute, .finding .ftitle, .finding .fdetail, .finding .fdetail b,
+    .badge, .empty-note{
+      color:#000!important;
+    }
+
+    /* Flächen weiß, klare graue Ränder */
+    .glass{background:#fff!important;border:1px solid #999!important;box-shadow:none!important;backdrop-filter:none!important;}
+    .param-pill,.metric,.finding,.viz-panel,.viz-tile,input,select,.dim-info,.dim-tab,.speed-bar,.banner{
+      background:#fff!important;border-color:#999!important;
+    }
+    input,select{box-shadow:none!important;}
+    /* Status weiterhin über farbige Ränder/Chips/Balken erkennbar (Text bleibt schwarz) */
+    .badge{background:#fff!important;border:1px solid #777!important;}
+
+    /* Gruppierungen nicht über Seitenumbrüche zerreißen */
+    .route, .finding, .viz-panel, .viz-tile, .param-pill, .metric, .field,
+    .banner, .metrics, .viz-tiles, .speed-bar-wrap, .route-head{
+      break-inside:avoid!important; page-break-inside:avoid!important;
+    }
+    .card h2, .viz-head, .route-head{ break-after:avoid!important; page-break-after:avoid!important; }
+    .card{ break-before:auto; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-mesh"></div>
+<div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+<div class="bg-grid"></div>
+
+<div class="wrap">
+  <header class="app-head">
+    <div class="brand">
+      <div class="logo-mark" aria-label="Alpen Glasfaser Logo">
+        <svg viewBox="0 0 48 48" fill="currentColor" stroke="none">
+          <path d="M24 1C22.835 1 21.795 1.734 21.148 3.013L1.594 41.656C0.975 42.88 0.974 44.157 1.591 45.161C2.202 46.154 3.324 46.728 4.676 46.741L43.324 46.741C44.676 46.728 45.798 46.154 46.408 45.162C47.025 44.158 47.024 42.88 46.405 41.656L40.114 29.224C39.108 27.235 36.668 25.735 34.437 25.735L34.436 25.735L23.989 25.738C23.014 25.738 22.223 26.53 22.223 27.505C22.224 28.48 23.014 29.271 23.99 29.271L23.99 29.271L34.437 29.267L34.438 29.267C35.332 29.267 36.559 30.021 36.963 30.819L43.232 43.209L4.768 43.209L24 5.201L30.894 18.826C31.205 19.441 31.827 19.795 32.472 19.795C32.74 19.795 33.012 19.734 33.267 19.605C34.138 19.164 34.486 18.102 34.046 17.231L26.852 3.013C26.204 1.734 25.165 1 24 1Z"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Kalibrierungsprotokoll-Checker</h1>
+        <div class="sub">Alpen Glasfaser GmbH · FTTH-Plausibilitätsprüfung · physikbasiert (µ = 0.03, geriffelte HDPE-Innenriefung)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Reference -->
+  <section class="glass card no-print">
+    <h2><span class="dot"></span>Normwerte & physikalische Grundlage (fix hinterlegt)</h2>
+    <div class="params-grid">
+      <div class="param-pill">
+        <div class="label">Kalibrierdruck · 5 Zonen</div>
+        <div class="zone-legend">
+          <div class="zone-row"><span class="zone-chip" style="background:var(--nok)"></span>&lt; 2 bar · unzureichend</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--warn)"></span>2–3 bar · grenzwertig</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--ok)"></span>3–4 bar · optimal</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--warn)"></span>4–5 bar · Druckprüfung</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--nok)"></span>&gt; 5 bar · Maximum</div>
+        </div>
+      </div>
+      <div class="param-pill">
+        <div class="label">Geschwindigkeit · 4 Zonen</div>
+        <div class="zone-legend">
+          <div class="zone-row"><span class="zone-chip" style="background:var(--nok)"></span>&lt; 50 · steckt? Suchschwert</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--warn)"></span>50–150 · Warnstufe</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--ok)"></span>150–400 · Normbereich</div>
+          <div class="zone-row"><span class="zone-chip" style="background:var(--nok)"></span>&gt; 400 · über Maximum</div>
+        </div>
+        <small>v = Länge (m) / Zeit (min)</small>
+      </div>
+      <div class="param-pill"><div class="label">Reibungskoeffizient µ</div><div class="val">0.03</div><small>geriffelte HDPE-Innenriefung (Loibner/Vetter, Bereich 0.02–0.04)</small></div>
+      <div class="param-pill"><div class="label">Kraftbilanz (physikalisch)</div><div class="val">F = P·A vs. µ·m·g</div><small>Vorschubkraft (Druck × ID-Querschnitt) gegen Sonden-Reibung · g=9.81 · ID 4 mm (7/4) · ID 10 mm (14/10)</small></div>
+    </div>
+  </section>
+
+  <!-- Kopfdaten -->
+  <section class="glass card">
+    <h2><span class="dot"></span>Kopfdaten / Projektinfos</h2>
+    <div class="grid-2">
+      <div class="field"><label for="projName">Projektname / ID</label><input id="projName" type="text" placeholder="z.B. AGF-2026-0815"></div>
+      <div class="field"><label for="mfg">MFG Bereich</label><input id="mfg" type="text" placeholder="z.B. MFG Nord 4"></div>
+      <div class="field"><label for="feeder">Feederkette</label><input id="feeder" type="text" placeholder="z.B. FK-12-Süd"></div>
+      <div class="field"><label for="datum">Datum</label><input id="datum" type="date"></div>
+      <div class="field"><label for="monteur">Name des Monteurs</label><input id="monteur" type="text" placeholder="Vor- und Nachname"></div>
+      <div class="field"><label for="firma">Firma (ausführende Baufirma)</label><input id="firma" type="text" placeholder="z.B. Tiefbau Müller GmbH"></div>
+    </div>
+    <div class="field" style="margin-top:18px;">
+      <label>Röhrchendimension wählen</label>
+      <div class="dim-tabs">
+        <div class="dim-tab active" id="tab74" onclick="selectDim('74')">7 / 4 mm<small>Kaliber ⌀ 3,2 mm · ID 4 mm</small></div>
+        <div class="dim-tab" id="tab1410" onclick="selectDim('1410')">14 / 10 mm<small>Kaliber ⌀ 8,5 mm · ID 10 mm</small></div>
+      </div>
+      <div class="dim-info" id="dimInfo">Gewählte Dimension: <b id="dimInfoText"></b></div>
+    </div>
+  </section>
+
+  <!-- Routes -->
+  <section class="glass card">
+    <h2><span class="dot"></span>Strecken-Eingabe</h2>
+    <div id="routes"></div>
+    <div class="actions no-print"><button class="btn" onclick="addRow()">＋ Strecke hinzufügen</button></div>
+  </section>
+
+  <!-- Actions -->
+  <div class="actions no-print" style="margin-bottom:26px;">
+    <button class="btn btn-primary" onclick="runCheck()">✓ Plausibilität prüfen</button>
+    <button class="btn" onclick="addRow()">＋ Strecke hinzufügen</button>
+    <button class="btn" onclick="window.print()">🖨 Drucken / PDF</button>
+  </div>
+
+  <!-- Result -->
+  <section class="glass card" id="resultPanel">
+    <h2><span class="dot"></span>Ergebnis der Plausibilitätsprüfung</h2>
+    <div id="banner"></div>
+    <div class="metrics">
+      <div class="metric"><div class="num s-nok" id="mCrit">0</div><div class="cap">Kritische Befunde</div></div>
+      <div class="metric"><div class="num s-warn" id="mWarn">0</div><div class="cap">Hinweise</div></div>
+      <div class="metric"><div class="num s-ok" id="mRoutes">0</div><div class="cap">Strecken geprüft</div></div>
+      <div class="metric"><div class="num" id="mLen">0</div><div class="cap">Gesamtlänge (m)</div></div>
+    </div>
+    <div class="findings" id="findings"></div>
+  </section>
+</div>
+
+<script>
+/* ===== Fixed reference params ===== */
+const MU = 0.03, G = 9.81;
+const PARAMS = {
+  dims: {
+    '74':   { label:'7 / 4 mm',  caliber:3.2, idMm:4,  probeMass:0.05 },
+    '1410': { label:'14 / 10 mm', caliber:8.5, idMm:10, probeMass:0.20 }
+  },
+  caliberTol: 0.05
+};
+let currentDim = '74';
+let rowCount = 0;
+
+/* ===== helpers ===== */
+function num(v){ if(v==null) return NaN; v=String(v).trim().replace(',', '.'); return v===''?NaN:parseFloat(v); }
+function extractCaliber(text){ const m=String(text).match(/(\d+[.,]?\d*)/); return m?parseFloat(m[1].replace(',', '.')):NaN; }
+function fmt(n,d){ return n.toLocaleString('de-DE',{minimumFractionDigits:d??1,maximumFractionDigits:d??1}); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* Querschnittsfläche ID [m²] */
+function areaID(idMm){ return Math.PI * Math.pow(idMm/2000, 2); }
+/* Vorschubkraft (pneumatisch): F = P[Pa] × A[m²]  → [N] */
+function driveForce(kdruckBar, idMm){ return kdruckBar * 1e5 * areaID(idMm); }
+/* Reibungswiderstand der Sonde: R = µ × m × g  → [N] */
+function frictionForce(massKg){ return MU * massKg * G; }
+
+/* ===== Zone classifiers ===== */
+// pressure 5-zone -> {cls,label}
+function pressureZone(v){
+  if(isNaN(v)) return {cls:null,label:'Wert eingeben'};
+  if(v < 2)   return {cls:'nok', label:'Unzureichend — Kalibrierung nicht möglich'};
+  if(v < 3)   return {cls:'warn',label:'Grenzwertig niedrig (geriffelte Innenriefung)'};
+  if(v <= 4)  return {cls:'ok',  label:'Optimaler Kalibrierbereich'};
+  if(v <= 5)  return {cls:'warn',label:'Übergang zur Druckprüfung (5 bar = Schreiberaufzeichnung)'};
+  return {cls:'nok', label:'Überschreitet max. Kalibrierdruck'};
+}
+// speed 4-zone
+function speedZone(v){
+  if(isNaN(v)) return {cls:null,label:'—'};
+  if(v < 50)  return {cls:'nok', label:'Kaliber steckt evtl. fest → Ortung mit Suchschwert'};
+  if(v < 150) return {cls:'warn',label:'Warnstufe — kurze Strecke / höhere Reibung plausibel'};
+  if(v <= 400)return {cls:'ok',  label:'Normbereich (ITU-T L.108 / IEC 60794-5)'};
+  return {cls:'nok', label:'Über Maximum — Zeit- oder Streckenangabe prüfen'};
+}
+// Kraftreserve = Vorschubkraft ÷ Reibungswiderstand (dimensionslos)
+function forceZone(reserve){
+  if(isNaN(reserve)) return {cls:null,label:'—'};
+  if(reserve >= 5)   return {cls:'ok',  label:'Ausreichende Vorschub-Kraftreserve'};
+  if(reserve >= 1.5) return {cls:'warn',label:'Knappe Kraftreserve — Druck grenzwertig'};
+  return {cls:'nok', label:'Vorschubkraft ≲ Reibung — Sonde kann stehen bleiben'};
+}
+function worst(...zones){
+  const order = {nok:3,warn:2,ok:1};
+  let best = 'ok', has=false;
+  zones.forEach(z=>{ if(z && z.cls){ has=true; if(order[z.cls]>order[best]) best=z.cls; }});
+  return has?best:null;
+}
+
+/* ===== Dimension selection ===== */
+function selectDim(key){
+  currentDim = key;
+  document.getElementById('tab74').classList.toggle('active', key==='74');
+  document.getElementById('tab1410').classList.toggle('active', key==='1410');
+  const d = PARAMS.dims[key];
+  document.getElementById('dimInfoText').textContent =
+    d.label + ' — Kaliber ⌀ ' + String(d.caliber).replace('.',',') + ' mm · Innendurchmesser ' + d.idMm + ' mm (für Vorschubkraft)';
+  document.querySelectorAll('.route').forEach(r=>{ checkCaliber(r.querySelector('[data-f="caliber"]')); updateViz(r.id.replace('route-','')); });
+}
+
+/* ===== Rows ===== */
+function addRow(){
+  rowCount++; const id = rowCount;
+  const div = document.createElement('div');
+  div.className = 'glass route'; div.id = 'route-'+id;
+  div.innerHTML = `
+    <div class="route-head">
+      <span class="rname">Strecke <span class="rnum">#${id}</span></span>
+      <button class="btn btn-ghost-danger no-print" onclick="removeRow(${id})">✕ Entfernen</button>
+    </div>
+    <div class="route-grid">
+      <div class="field f-span2"><label>Anfangsknoten</label><input type="text" data-f="start" placeholder="z.B. K-104"></div>
+      <div class="field f-span2"><label>Endknoten</label><input type="text" data-f="end" placeholder="z.B. K-118"></div>
+      <div class="field f-span2"><label>Länge der Trasse (m)</label><input type="number" step="any" min="0" data-f="len" placeholder="z.B. 540" oninput="updateViz(${id})"></div>
+
+      <div class="field f-span2"><label>Röhrchenreinigung / -schmierung</label>
+        <select data-f="reinigung"><option value="ja">Durchgeführt</option><option value="nein">Nicht durchgeführt</option></select></div>
+      <div class="field f-span2"><label>Schmiermittel</label><input type="text" data-f="schmier" placeholder="z.B. MJL 240 / Vetter"></div>
+      <div class="field f-span2"><label>Kaliber Typ &amp; Durchmesser</label>
+        <input type="text" data-f="caliber" placeholder='z.B. Sondenkaliber ⌀3,2mm' oninput="checkCaliber(this)">
+        <div class="hint" data-h="caliber"></div></div>
+
+      <div class="field f-span2"><label>Kalibrierdruck (bar)</label>
+        <input type="number" step="any" min="0" data-f="kdruck" placeholder="optimal 3–4" oninput="updateViz(${id})">
+        <div class="hint" data-h="kdruck"></div></div>
+      <div class="field f-span2"><label>Kalibrierzeit (min)</label><input type="number" step="any" min="0" data-f="kzeit" placeholder="z.B. 2,4" oninput="updateViz(${id})"></div>
+      <div class="field f-span2"><label>Ergebnis</label>
+        <select data-f="ergebnis"><option value="ok">Röhrchen durchgängig</option><option value="nok">Nicht durchgängig</option></select></div>
+
+      <div class="field f-span6"><label>Bemerkungen / Fehlerstelle</label><input type="text" data-f="bemerkung" placeholder="optional"></div>
+    </div>
+
+    <div class="viz-panel" id="viz-${id}">
+      <div class="viz-head">⚡ Live-Visualizer — Druck · Geschwindigkeit · Kraftbilanz (µ = 0.03)</div>
+      <div class="viz-tiles">
+        <div class="viz-tile" id="viz-${id}-press"><div class="t-cap">Kalibrierdruck</div><div class="t-val">—</div><div class="t-sub">—</div></div>
+        <div class="viz-tile" id="viz-${id}-speed"><div class="t-cap">Gemessene Geschwindigkeit</div><div class="t-val">—</div><div class="t-sub">—</div></div>
+        <div class="viz-tile" id="viz-${id}-phys"><div class="t-cap">Kraftreserve · Vorschub ÷ Reibung</div><div class="t-val">—</div><div class="t-sub">—</div></div>
+      </div>
+      <div class="speed-bar-wrap">
+        <div class="speed-bar-scale"><span>0</span><span>Geschwindigkeitsskala</span><span>400 m/min</span></div>
+        <div class="speed-bar">
+          <div class="speed-fill" id="viz-${id}-fill"></div>
+          <div class="marker m50"><span>50</span></div>
+          <div class="marker m150"><span>150</span></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('routes').appendChild(div);
+}
+function removeRow(id){ const el=document.getElementById('route-'+id); if(el) el.remove(); }
+
+/* ===== Caliber live check ===== */
+function checkCaliber(el){
+  if(!el) return;
+  const soll = PARAMS.dims[currentDim].caliber, sollStr = String(soll).replace('.',',');
+  const txt = el.value.trim();
+  const setH=(msg,cls)=>{const h=el.closest('.field').querySelector('[data-h="caliber"]'); h.textContent=msg; h.className='hint '+cls;};
+  el.classList.remove('b-ok','b-warn','b-nok');
+  if(txt===''){ setH('',''); return; }
+  const v = extractCaliber(txt);
+  if(isNaN(v)){ el.classList.add('b-nok'); setH('Kein Kaliberwert erkennbar','s-nok'); return; }
+  if(Math.abs(v-soll)<=PARAMS.caliberTol){ el.classList.add('b-ok'); setH('Passt zum Soll ⌀'+sollStr+' mm','s-ok'); }
+  else { el.classList.add('b-nok'); setH('Abweichung: '+String(v).replace('.',',')+' mm statt ⌀'+sollStr+' mm','s-nok'); }
+}
+
+/* ===== Live visualizer ===== */
+function updateViz(id){
+  const r = document.getElementById('route-'+id); if(!r) return;
+  const get = n => (r.querySelector('[data-f="'+n+'"]')||{}).value || '';
+  const len = num(get('len')), kzeit = num(get('kzeit')), kdruck = num(get('kdruck'));
+  const dim = PARAMS.dims[currentDim];
+  const panel = document.getElementById('viz-'+id);
+
+  // border live feedback on pressure input
+  const pInput = r.querySelector('[data-f="kdruck"]');
+  const pz0 = pressureZone(kdruck);
+  pInput.classList.remove('b-ok','b-warn','b-nok');
+  const ph = pInput.closest('.field').querySelector('[data-h="kdruck"]');
+  if(pz0.cls){ pInput.classList.add('b-'+pz0.cls); ph.textContent=pz0.label; ph.className='hint s-'+pz0.cls; }
+  else { ph.textContent=''; ph.className='hint'; }
+
+  // show panel only when length + time present
+  const haveCore = !isNaN(len) && !isNaN(kzeit) && kzeit>0;
+  if(!haveCore){ panel.style.display='none'; return; }
+  panel.style.display='block';
+
+  const speed = len / kzeit;
+  const sz = speedZone(speed);
+  const pz = pressureZone(kdruck);
+  const Fd = isNaN(kdruck) ? NaN : driveForce(kdruck, dim.idMm);
+  const Ff = frictionForce(dim.probeMass);
+  const reserve = isNaN(Fd) ? NaN : Fd / Ff;
+  const fz = forceZone(reserve);
+
+  // Tile 1: pressure
+  setTile('viz-'+id+'-press', pz.cls, isNaN(kdruck)?'—':fmt(kdruck)+' bar', isNaN(kdruck)?'Kalibrierdruck eingeben':pz.label);
+  // Tile 2: speed
+  setTile('viz-'+id+'-speed', sz.cls, fmt(speed)+' m/min', sz.label);
+  // Tile 3: force reserve (Vorschubkraft ÷ Reibung)
+  const fSub = isNaN(Fd)
+    ? 'Kalibrierdruck eingeben für Kraftbilanz'
+    : fz.label + ' · Reibung Sonde ≈ '+fmt(Ff,2)+' N (m '+fmt(dim.probeMass,2)+' kg, µ=0.03)';
+  setTile('viz-'+id+'-phys', fz.cls, isNaN(Fd)?'—':fmt(Fd,1)+' N', fSub);
+
+  // Speed bar
+  const fill = document.getElementById('viz-'+id+'-fill');
+  const pct = Math.max(0, Math.min(speed/400,1))*100;
+  fill.style.width = pct+'%';
+  fill.classList.remove('fill-ok','fill-warn','fill-nok');
+  if(sz.cls) fill.classList.add('fill-'+sz.cls);
+
+  // Panel border = worst zone
+  const w = worst(pz, sz, fz);
+  panel.classList.remove('panel-ok','panel-warn','panel-nok');
+  if(w) panel.classList.add('panel-'+w);
+}
+function setTile(elId, cls, val, sub){
+  const t = document.getElementById(elId); if(!t) return;
+  t.classList.remove('tile-ok','tile-warn','tile-nok');
+  if(cls) t.classList.add('tile-'+cls);
+  t.querySelector('.t-val').textContent = val;
+  t.querySelector('.t-sub').textContent = sub;
+}
+
+/* ===== Full evaluation ===== */
+function runCheck(){
+  const routes = document.querySelectorAll('.route');
+  const findings = [];
+  let crit=0, warn=0, totalLen=0;
+  const dim = PARAMS.dims[currentDim];
+  const soll = dim.caliber, sollStr = String(soll).replace('.',',');
+
+  routes.forEach(r=>{
+    const id = r.id.replace('route-','');
+    const get = n => (r.querySelector('[data-f="'+n+'"]')||{}).value || '';
+    const label = 'Strecke #'+id+' ('+(get('start')||'—')+' → '+(get('end')||'—')+')';
+    const len=num(get('len')), kdruck=num(get('kdruck')), kzeit=num(get('kzeit'));
+    const reinigung=get('reinigung'), ergebnis=get('ergebnis'), caliberTxt=get('caliber');
+    if(!isNaN(len)) totalLen+=len;
+    let routeClean = true;
+
+    const flag=(kind,title,detail)=>{ findings.push(f(kind,label,title,detail)); if(kind==='nok'){crit++;routeClean=false;} else if(kind==='warn'){warn++;routeClean=false;} };
+
+    // 1. Ergebnis
+    if(ergebnis==='nok') flag('nok','Röhrchen nicht durchgängig','Ergebnis laut Protokoll: <b>Nicht durchgängig</b> — Nachkalibrierung erforderlich.');
+
+    // 2. Kaliber
+    if(caliberTxt.trim()===''){ flag('nok','Kaliber fehlt','Kein Kaliber eingetragen — gefordert ⌀ <b>'+sollStr+' mm</b>.'); }
+    else { const cv=extractCaliber(caliberTxt);
+      if(isNaN(cv)) flag('nok','Kaliber nicht lesbar','Aus „<b>'+esc(caliberTxt)+'</b>" kein Wert erkennbar.');
+      else if(Math.abs(cv-soll)>PARAMS.caliberTol) flag('nok','Falsches Kaliber verwendet','Istwert <b>⌀ '+fmt(cv)+' mm</b> statt gefordert ⌀ '+sollStr+' mm.');
+    }
+
+    // 3. Kalibrierdruck (5-zone)
+    if(isNaN(kdruck)) flag('warn','Kalibrierdruck fehlt','Kein Kalibrierdruck eingetragen — Druckbewertung nicht möglich.');
+    else { const pz=pressureZone(kdruck);
+      if(pz.cls==='nok') flag('nok','Kalibrierdruck unzulässig','Istwert <b>'+fmt(kdruck)+' bar</b> — '+pz.label+'.');
+      else if(pz.cls==='warn') flag('warn','Kalibrierdruck im Warnbereich','Istwert <b>'+fmt(kdruck)+' bar</b> — '+pz.label+'.');
+    }
+
+    // 4. Geschwindigkeit (4-zone) + physik
+    if(isNaN(kzeit)||kzeit<=0){ flag('warn','Kalibrierzeit fehlt','Geschwindigkeitsprüfung nicht möglich — keine gültige Zeitangabe.'); }
+    else if(!isNaN(len)){
+      const speed=len/kzeit, sz=speedZone(speed);
+      if(sz.cls==='nok') flag('nok','Geschwindigkeit außerhalb des Bereichs','<b>'+fmt(speed)+' m/min</b> — '+sz.label+'.');
+      else if(sz.cls==='warn') flag('warn','Geschwindigkeit im Warnbereich','<b>'+fmt(speed)+' m/min</b> — '+sz.label+'.');
+      // physical force balance (Vorschubkraft vs. Reibung)
+      if(!isNaN(kdruck)){
+        const Fd=driveForce(kdruck,dim.idMm), Ff=frictionForce(dim.probeMass), fz=forceZone(Fd/Ff);
+        if(fz.cls==='nok') flag('warn','Vorschubkraft unzureichend','Pneumatische Vorschubkraft <b>'+fmt(Fd,1)+' N</b> liegt kaum über dem Reibungswiderstand der Sonde (<b>'+fmt(Ff,2)+' N</b>, µ=0.03) — Kaliber kann stehen bleiben.');
+      }
+    }
+
+    // 5. Reinigung
+    if(reinigung==='nein') flag('warn','Reinigung/Schmierung nicht durchgeführt','Röhrchenreinigung/-schmierung wurde laut Protokoll nicht durchgeführt.');
+
+    if(routeClean) findings.push(f('ok',label,'Strecke plausibel','Alle Prüfwerte innerhalb der Normvorgaben.'));
+  });
+
+  document.getElementById('mCrit').textContent=crit;
+  document.getElementById('mWarn').textContent=warn;
+  document.getElementById('mRoutes').textContent=routes.length;
+  document.getElementById('mLen').textContent=totalLen.toLocaleString('de-DE',{maximumFractionDigits:0});
+
+  const banner=document.getElementById('banner');
+  if(routes.length===0){ banner.className='banner banner-warn'; banner.innerHTML='<span class="ico">⚠️</span><span>Keine Strecke erfasst — bitte mindestens eine Strecke eingeben.</span>'; }
+  else if(crit>0){ banner.className='banner banner-nok'; banner.innerHTML='<span class="ico">⛔</span><span>Protokoll nicht akzeptabel — Nachbesserung erforderlich</span>'; }
+  else if(warn>0){ banner.className='banner banner-warn'; banner.innerHTML='<span class="ico">⚠️</span><span>Protokoll mit Hinweisen — Rücksprache empfohlen</span>'; }
+  else { banner.className='banner banner-ok'; banner.innerHTML='<span class="ico">✅</span><span>Protokoll plausibel — akzeptierbar</span>'; }
+
+  const fc=document.getElementById('findings'); fc.innerHTML='';
+  if(findings.length===0) fc.innerHTML='<div class="empty-note">Keine Befunde — bitte zuerst Strecken erfassen.</div>';
+  else findings.forEach(x=>fc.appendChild(x));
+
+  const panel=document.getElementById('resultPanel');
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function f(kind, route, title, detail){
+  const badge = kind==='nok'?'NOK':kind==='warn'?'Prüfen':'OK';
+  const el=document.createElement('div'); el.className='finding f-'+kind;
+  el.innerHTML='<span class="badge f-'+kind+'">'+badge+'</span><div class="body"><div class="froute">'+esc(route)+'</div><div class="ftitle">'+esc(title)+'</div><div class="fdetail">'+detail+'</div></div>';
+  return el;
+}
+
+/* ===== iOS Home-Screen-Icon (für „Zum Home-Bildschirm") aus dem Logo erzeugen ===== */
+const LOGO_PATH = 'M24 1C22.835 1 21.795 1.734 21.148 3.013L1.594 41.656C0.975 42.88 0.974 44.157 1.591 45.161C2.202 46.154 3.324 46.728 4.676 46.741L43.324 46.741C44.676 46.728 45.798 46.154 46.408 45.162C47.025 44.158 47.024 42.88 46.405 41.656L40.114 29.224C39.108 27.235 36.668 25.735 34.437 25.735L34.436 25.735L23.989 25.738C23.014 25.738 22.223 26.53 22.223 27.505C22.224 28.48 23.014 29.271 23.99 29.271L23.99 29.271L34.437 29.267L34.438 29.267C35.332 29.267 36.559 30.021 36.963 30.819L43.232 43.209L4.768 43.209L24 5.201L30.894 18.826C31.205 19.441 31.827 19.795 32.472 19.795C32.74 19.795 33.012 19.734 33.267 19.605C34.138 19.164 34.486 18.102 34.046 17.231L26.852 3.013C26.204 1.734 25.165 1 24 1Z';
+function buildTouchIcon(){
+  try{
+    const sz=180, c=document.createElement('canvas'); c.width=c.height=sz;
+    const ctx=c.getContext('2d');
+    const g=ctx.createLinearGradient(0,0,0,sz); g.addColorStop(0,'#0e3540'); g.addColorStop(1,'#081a20');
+    ctx.fillStyle=g; ctx.fillRect(0,0,sz,sz);
+    const pad=34, s=(sz-2*pad)/48; ctx.translate(pad,pad); ctx.scale(s,s);
+    ctx.fillStyle='#00cfb4'; ctx.fill(new Path2D(LOGO_PATH));
+    const link=document.createElement('link'); link.rel='apple-touch-icon'; link.href=c.toDataURL('image/png');
+    document.head.appendChild(link);
+  }catch(e){/* Fallback: SVG-Favicon bleibt aktiv */}
+}
+
+/* ===== Init ===== */
+(function init(){
+  const t=new Date();
+  document.getElementById('datum').value = t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  selectDim('74');
+  addRow();
+  buildTouchIcon();
+})();
+</script>
+</body>
+</html>
