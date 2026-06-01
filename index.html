@@ -129,6 +129,24 @@
   .dim-info{margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(0,207,180,0.08);border:1px dashed rgba(0,207,180,0.4);font-size:0.88rem;}
   .dim-info b{color:var(--accent);font-family:'DM Mono';}
 
+  /* Upload / Drag & Drop */
+  .dropzone{
+    border:2px dashed rgba(0,207,180,0.45);border-radius:14px;padding:26px 20px;text-align:center;
+    cursor:pointer;transition:all .15s;background:rgba(0,207,180,0.04);outline:none;
+  }
+  .dropzone:hover,.dropzone:focus-visible{border-color:var(--accent);background:rgba(0,207,180,0.09);}
+  .dropzone.drag{border-color:var(--accent);background:rgba(0,207,180,0.16);transform:scale(1.01);box-shadow:0 0 0 3px rgba(0,207,180,0.18);}
+  .dropzone .dz-icon{font-size:2rem;line-height:1;}
+  .dropzone .dz-main{font-weight:600;margin-top:8px;font-size:0.98rem;}
+  .dropzone .dz-sub{color:var(--text-dim);font-size:0.82rem;margin-top:5px;}
+  .dropzone.drag *{pointer-events:none;}
+  .upload-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px;}
+  .import-status{font-family:'DM Mono';font-size:0.86rem;flex:1;min-width:180px;}
+  .import-status.s-ok{color:var(--ok);}.import-status.s-warn{color:var(--warn);}.import-status.s-nok{color:var(--nok);}
+  .import-status.s-busy{color:var(--text-dim);}
+  .upload-hint{margin-top:12px;font-size:0.78rem;color:var(--text-dim);line-height:1.5;}
+  .upload-hint code{font-family:'DM Mono';color:var(--accent);background:rgba(0,207,180,0.08);padding:1px 5px;border-radius:5px;}
+
   /* Route cards */
   .route{padding:18px 20px;margin-bottom:16px;position:relative;border-left:3px solid rgba(0,207,180,0.5);}
   .route-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
@@ -272,6 +290,21 @@
     </div>
   </header>
 
+  <!-- Upload / Drag & Drop -->
+  <section class="glass card no-print" id="uploadCard">
+    <h2><span class="dot"></span>Protokoll hochladen <span style="font-weight:400;color:var(--text-dim);font-size:0.82rem;">— automatisch auslesen &amp; bewerten</span></h2>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Protokoll-Datei auswählen oder per Drag &amp; Drop ablegen">
+      <div class="dz-icon">📤</div>
+      <div class="dz-main">Protokoll hierher ziehen oder tippen zum Auswählen</div>
+      <div class="dz-sub">Excel (.xlsx, .xls) oder CSV · Daten werden ausgelesen, in das Formular übertragen und sofort bewertet</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv" hidden>
+    <div class="upload-actions">
+      <button class="btn" type="button" onclick="downloadTemplate()">⬇ CSV-Vorlage herunterladen</button>
+      <span class="import-status" id="importStatus"></span>
+    </div>
+  </section>
+
   <!-- Reference -->
   <section class="glass card no-print">
     <h2><span class="dot"></span>Normwerte & physikalische Grundlage (fix hinterlegt)</h2>
@@ -365,7 +398,14 @@ let rowCount = 0;
 
 /* ===== helpers ===== */
 function num(v){ if(v==null) return NaN; v=String(v).trim().replace(',', '.'); return v===''?NaN:parseFloat(v); }
-function extractCaliber(text){ const m=String(text).match(/(\d+[.,]?\d*)/); return m?parseFloat(m[1].replace(',', '.')):NaN; }
+function extractCaliber(text){
+  const s=String(text);
+  // Nur ein Wert mit "mm" dahinter ist der Kaliber-Durchmesser (z.B. "MKV 0810 ⌀3,2mm" -> 3,2, nicht 0810).
+  const mm=s.match(/(\d+[.,]?\d*)\s*mm\b/i);
+  if(mm) return parseFloat(mm[1].replace(',', '.'));
+  // Fallback (nur falls kein "mm" angegeben, z.B. manuelle Eingabe "3,2"): erste reine Zahl.
+  const any=s.match(/(\d+[.,]?\d*)/); return any?parseFloat(any[1].replace(',', '.')):NaN;
+}
 function fmt(n,d){ return n.toLocaleString('de-DE',{minimumFractionDigits:d??1,maximumFractionDigits:d??1}); }
 function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -434,6 +474,10 @@ function addRow(){
       <div class="field f-span2"><label>Endknoten</label><input type="text" data-f="end" placeholder="z.B. K-118"></div>
       <div class="field f-span2"><label>Länge der Trasse (m)</label><input type="number" step="any" min="0" data-f="len" placeholder="z.B. 540" oninput="updateViz(${id})"></div>
 
+      <div class="field f-span2"><label>Prüfdruck (bar)</label>
+        <input type="number" step="any" min="0" data-f="pruefdruck" placeholder="3–5 bar" oninput="checkPruefdruck(this)">
+        <div class="hint" data-h="pruefdruck"></div></div>
+
       <div class="field f-span2"><label>Röhrchenreinigung / -schmierung</label>
         <select data-f="reinigung"><option value="ja">Durchgeführt</option><option value="nein">Nicht durchgeführt</option></select></div>
       <div class="field f-span2"><label>Schmiermittel</label><input type="text" data-f="schmier" placeholder="z.B. MJL 240 / Vetter"></div>
@@ -484,6 +528,22 @@ function checkCaliber(el){
   if(isNaN(v)){ el.classList.add('b-nok'); setH('Kein Kaliberwert erkennbar','s-nok'); return; }
   if(Math.abs(v-soll)<=PARAMS.caliberTol){ el.classList.add('b-ok'); setH('Passt zum Soll ⌀'+sollStr+' mm','s-ok'); }
   else { el.classList.add('b-nok'); setH('Abweichung: '+String(v).replace('.',',')+' mm statt ⌀'+sollStr+' mm','s-nok'); }
+}
+
+/* ===== Prüfdruck (Druckprüfung der Trasse): 3–5 bar · genau 5 = Warnung · sonst kritisch ===== */
+function pruefdruckZone(v){
+  if(isNaN(v)) return {cls:null,label:''};
+  if(v < 3 || v > 5) return {cls:'nok', label:'Außerhalb 3–5 bar — Druckprüfung nicht bestanden'};
+  if(v === 5)        return {cls:'warn',label:'Oberes Limit (5 bar) — Warnstufe'};
+  return {cls:'ok', label:'Im Sollbereich 3–5 bar'};
+}
+function checkPruefdruck(el){
+  if(!el) return;
+  const z = pruefdruckZone(num(el.value));
+  const setH=(msg,cls)=>{const h=el.closest('.field').querySelector('[data-h="pruefdruck"]'); h.textContent=msg; h.className='hint '+cls;};
+  el.classList.remove('b-ok','b-warn','b-nok');
+  if(!z.cls){ setH('',''); return; }
+  el.classList.add('b-'+z.cls); setH(z.label,'s-'+z.cls);
 }
 
 /* ===== Live visualizer ===== */
@@ -557,7 +617,7 @@ function runCheck(){
     const id = r.id.replace('route-','');
     const get = n => (r.querySelector('[data-f="'+n+'"]')||{}).value || '';
     const label = 'Strecke #'+id+' ('+(get('start')||'—')+' → '+(get('end')||'—')+')';
-    const len=num(get('len')), kdruck=num(get('kdruck')), kzeit=num(get('kzeit'));
+    const len=num(get('len')), kdruck=num(get('kdruck')), kzeit=num(get('kzeit')), pruef=num(get('pruefdruck'));
     const reinigung=get('reinigung'), ergebnis=get('ergebnis'), caliberTxt=get('caliber');
     if(!isNaN(len)) totalLen+=len;
     let routeClean = true;
@@ -574,7 +634,14 @@ function runCheck(){
       else if(Math.abs(cv-soll)>PARAMS.caliberTol) flag('nok','Falsches Kaliber verwendet','Istwert <b>⌀ '+fmt(cv)+' mm</b> statt gefordert ⌀ '+sollStr+' mm.');
     }
 
-    // 3. Kalibrierdruck (5-zone)
+    // 3a. Prüfdruck (Druckprüfung der Trasse): 3–5 bar · =5 Warnung · sonst kritisch
+    if(!isNaN(pruef)){
+      const pp=pruefdruckZone(pruef);
+      if(pp.cls==='nok') flag('nok','Prüfdruck außerhalb des Bereichs','Istwert <b>'+fmt(pruef)+' bar</b> — '+pp.label+'.');
+      else if(pp.cls==='warn') flag('warn','Prüfdruck am oberen Limit','Istwert <b>'+fmt(pruef)+' bar</b> — '+pp.label+'.');
+    }
+
+    // 3b. Kalibrierdruck (5-zone)
     if(isNaN(kdruck)) flag('warn','Kalibrierdruck fehlt','Kein Kalibrierdruck eingetragen — Druckbewertung nicht möglich.');
     else { const pz=pressureZone(kdruck);
       if(pz.cls==='nok') flag('nok','Kalibrierdruck unzulässig','Istwert <b>'+fmt(kdruck)+' bar</b> — '+pz.label+'.');
@@ -627,6 +694,249 @@ function f(kind, route, title, detail){
   return el;
 }
 
+/* =====================================================================
+   PROTOKOLL-UPLOAD: Excel/CSV auslesen → Formular füllen → bewerten
+   ===================================================================== */
+
+/* Spaltenerkennung: normalisierter Header → Feldschlüssel (Reihenfolge = Priorität) */
+function normH(t){
+  return String(t==null?'':t).toLowerCase()
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss')
+    .replace(/\([^)]*\)/g,' ').replace(/[._\-\/]/g,' ').replace(/\s+/g,' ').trim();
+}
+const KOPF_FIELDS = ['projName','mfg','feeder','datum','monteur','firma'];
+const FIELD_MATCHERS = [
+  ['pruefdruck',h=> h.includes('pruefdruck')||h.includes('pruefen')||h.includes('pruefdr')],
+  ['kdruck',  h=> h.includes('kalibrierdruck')|| (h.includes('druck')&&!h.includes('pruef'))],
+  ['kzeit',   h=> h.includes('kalibrierzeit')||h.includes('zeit')||h.includes('dauer')|| h==='min'||h.includes('minute')],
+  ['caliber', h=> h.includes('verwendetes kaliber')||h.includes('kaliber')||h.includes('sonde')||h.includes('durchmesser')||h.includes('typ ')],
+  ['len',     h=> h.includes('laenge')||h.includes('trasse')||h.includes('meter')|| h==='m'],
+  ['start',   h=> h.includes('anfangsknoten')||h.includes('anfang')||h.includes('startknoten')|| /(^| )(start|von)( |$)/.test(h)||h.includes('knoten anf')],
+  ['end',     h=> h.includes('endknoten')|| /(^| )(endknoten|ende|end|ziel|bis)( |$)/.test(h)||h.includes('knoten end')],
+  ['schmier', h=> h.includes('schmiermittel')||h.includes('gleitmittel')||h.includes('mittel')],
+  ['reinigung',h=>h.includes('reinig')||h.includes('schmier')],
+  ['ergebnis',h=> h.includes('pruefergebnis')||h.includes('ergebnis')||h.includes('durchgaeng')||h.includes('status')||h.includes('resultat')],
+  ['bemerkung',h=>h.includes('bemerk')||h.includes('fehler')||h.includes('notiz')||h.includes('kommentar')||h.includes('sonstiges')],
+  ['dimension',h=>h.includes('dimension')||h.includes('roehrchen')|| h==='rohr'],
+  ['projName',h=> h.includes('projekt')|| h==='id'],
+  ['mfg',     h=> h.includes('mfg')],
+  ['feeder',  h=> h.includes('feeder')],
+  ['datum',   h=> h.includes('datum')||h.includes('date')],
+  ['monteur', h=> (h.includes('monteur')&&!h.includes('unterschrift'))||h.includes('techniker')|| (h.includes('name')&&!h.includes('knoten'))],
+  ['firma',   h=> h.includes('firma')||h.includes('baufirma')||h.includes('unternehmen')],
+];
+function matchField(headerText){
+  const h = normH(headerText); if(!h) return null;
+  for(const [field,test] of FIELD_MATCHERS){ if(test(h)) return field; }
+  return null;
+}
+function scoreRow(row){ if(!row) return 0; const seen={}; let s=0; row.forEach(c=>{ const f=matchField(c); if(f && !seen[f]){ seen[f]=1; s++; } }); return s; }
+function rowEmpty(row){ return !row || row.every(c=> String(c==null?'':c).trim()===''); }
+function isNumericCell(c){ if(typeof c==='number') return true; const s=String(c==null?'':c).trim(); return s!=='' && /^-?\d+([.,]\d+)?$/.test(s); }
+function numericCount(row){ return row? row.filter(isNumericCell).length : 0; }
+/* Kopfzeile: erkennt Felder UND enthält keine Datenwerte (Zahlen) */
+function isHeaderLike(row){ return scoreRow(row)>=2 && numericCount(row)===0; }
+
+/* Wertnormalisierung */
+function normDim(v){ const s=normH(v); if(/14|10/.test(s)) return '1410'; if(/7|4/.test(s)) return '74'; return null; }
+function normReinigung(v){ const s=normH(v); if(!s) return ''; if(/nicht|nein|kein|no|fehlt|^-$/.test(s)) return 'nein'; if(/durchg|ja|x|erledigt|ok|gemacht/.test(s)) return 'ja'; return ''; }
+function normErgebnis(v){ const s=normH(v); if(!s) return ''; if(/nicht|nok|n i o|nio|nein|fehler|gesperrt|blockiert/.test(s)) return 'nok'; if(/durchgaeng|ok|i o|io|ja|frei|offen/.test(s)) return 'ok'; return ''; }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function toISO(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function normDatum(v){
+  if(v==null||v==='') return '';
+  if(v instanceof Date && !isNaN(v)) return toISO(v);
+  if(typeof v==='number' && v>20000 && v<80000){ const d=new Date(Math.round((v-25569)*86400000)); if(!isNaN(d)) return toISO(d); }
+  const s=String(v).trim();
+  let m=s.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})$/); if(m){ let y=m[3]; if(y.length===2)y='20'+y; return y+'-'+pad2(m[2])+'-'+pad2(m[1]); }
+  m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return m[1]+'-'+pad2(m[2])+'-'+pad2(m[3]);
+  return '';
+}
+function numForInput(v){ const s=String(v==null?'':v).replace(/\s/g,'').replace(',','.'); const f=parseFloat(s); return isNaN(f)?'':String(f); }
+
+/* CSV → Matrix (Delimiter-Erkennung ; , \t · Quotes · BOM) */
+function csvToMatrix(text){
+  text = text.replace(/^﻿/,'');
+  const fl = (text.split(/\r?\n/).find(l=>l.trim()!=='')||'');
+  const counts={';':(fl.split(';').length-1), ',':(fl.split(',').length-1), '\t':(fl.split('\t').length-1)};
+  let delim=';'; if(counts[',']>counts[delim]) delim=','; if(counts['\t']>counts[delim]) delim='\t';
+  const rows=[]; let row=[], cell='', q=false;
+  for(let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
+    else { if(c==='"') q=true; else if(c===delim){ row.push(cell); cell=''; }
+      else if(c==='\n'){ row.push(cell); rows.push(row); row=[]; cell=''; }
+      else if(c==='\r'){} else cell+=c; }
+  }
+  if(cell!==''||row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+
+/* Matrix → Formular (vorlagengenau: mehrzeiliger Tabellenkopf + Kopfdaten-Block oben) */
+function importMatrix(matrix){
+  if(!matrix || !matrix.length) throw new Error('Datei ist leer.');
+  const N=Math.min(matrix.length,30);
+
+  // 1) Pivot = headerartige Zeile (Felder erkannt, keine Zahlen) mit den meisten Treffern
+  let pivot=-1, pscore=1;
+  for(let i=0;i<N;i++){ if(numericCount(matrix[i])>0) continue; const s=scoreRow(matrix[i]); if(s>pscore){ pscore=s; pivot=i; } }
+  if(pivot<0) throw new Error('Keine erkennbaren Spaltenüberschriften gefunden. Bitte die AGF-Vorlage verwenden.');
+
+  // 2) Kopf-Block um den Pivot ausdehnen (kurze Leerzeilen-Lücken erlaubt: 2-zeiliger Kopf)
+  //    Datenzeilen (mit Zahlen) beenden den Block zuverlässig.
+  let first=pivot, last=pivot;
+  for(let i=pivot+1, gap=0; i<N && i<=pivot+4; i++){
+    if(isHeaderLike(matrix[i])){ last=i; gap=0; }
+    else if(rowEmpty(matrix[i]) && gap<2){ gap++; }
+    else break;
+  }
+  for(let i=pivot-1, gap=0; i>=0 && i>=pivot-4; i--){
+    if(isHeaderLike(matrix[i])){ first=i; gap=0; }
+    else if(rowEmpty(matrix[i]) && gap<2){ gap++; }
+    else break;
+  }
+
+  // 3) Spalten → Felder aus kombiniertem Kopftext (Gruppen- + Unterüberschrift)
+  const width=Math.max(...matrix.slice(first,last+1).map(r=>r?r.length:0));
+  const cols={};
+  for(let c=0;c<width;c++){
+    let combined='';
+    for(let r=first;r<=last;r++){ const v=matrix[r]&&matrix[r][c]; if(v!=null&&String(v).trim()!=='') combined+=' '+v; }
+    const fld=matchField(combined);
+    if(fld && !(fld in cols)) cols[fld]=c;   // erste Spalte je Feld gewinnt
+  }
+
+  // 4) Kopfdaten aus dem Bereich ÜBER dem Tabellenkopf (Label links, Wert rechts daneben)
+  const kopf={};
+  for(let r=0;r<first;r++){
+    const row=matrix[r]; if(!row) continue;
+    for(let c=0;c<row.length;c++){
+      const f=matchField(row[c]); if(!f || !KOPF_FIELDS.includes(f) || (f in kopf)) continue;
+      for(let k=c+1;k<Math.min(row.length,c+7);k++){ const vv=row[k]; if(vv!=null && String(vv).trim()!==''){ kopf[f]=vv; break; } }
+      if(!(f in kopf)) kopf[f]='';
+    }
+  }
+
+  // 5) Datenzeilen
+  const dataRows=matrix.slice(last+1).filter(r=> !rowEmpty(r));
+  if(!dataRows.length) throw new Error('Tabellenkopf erkannt, aber keine ausgefüllten Strecken-Datenzeilen gefunden.');
+  const rawCol=(row,f)=> (f in cols && row[cols[f]]!=null)? row[cols[f]] : '';
+  const getCol=(row,f)=> String(rawCol(row,f)).trim();
+
+  // 6) Kopfdaten setzen (Block-Wert hat Vorrang, sonst Spalte der ersten Datenzeile = generisches CSV)
+  const first0=dataRows[0];
+  const kget=(f)=> (f in kopf && String(kopf[f]).trim()!=='')? kopf[f] : rawCol(first0,f);
+  const setVal=(id,v)=>{ const el=document.getElementById(id); const s=String(v==null?'':v).trim(); if(el && s!=='') el.value=s; };
+  setVal('projName',kget('projName')); setVal('mfg',kget('mfg')); setVal('feeder',kget('feeder'));
+  setVal('monteur',kget('monteur')); setVal('firma',kget('firma'));
+  const dv=normDatum(kget('datum')); if(dv) document.getElementById('datum').value=dv;
+
+  // 7) Dimension: explizite Spalte ODER aus erstem Kaliberwert ableiten
+  let dim=normDim(getCol(first0,'dimension'));
+  if(!dim){ for(const row of dataRows){ const cv=extractCaliber(getCol(row,'caliber')); if(!isNaN(cv)){ dim = cv>=6 ? '1410' : '74'; break; } } }
+  if(dim) selectDim(dim);
+
+  // 8) Strecken neu aufbauen
+  document.getElementById('routes').innerHTML='';
+  const routeFields=['start','end','len','pruefdruck','reinigung','schmier','caliber','kdruck','kzeit','ergebnis','bemerkung'];
+  let imported=0;
+  dataRows.forEach(row=>{
+    const hasRoute=['start','end','len','pruefdruck','kdruck','kzeit','caliber'].some(f=> getCol(row,f)!=='');
+    if(!hasRoute) return;
+    addRow(); const rEl=document.getElementById('route-'+rowCount);
+    routeFields.forEach(f=>{
+      let v=getCol(row,f);
+      if(f==='reinigung') v=normReinigung(v);
+      if(f==='ergebnis')  v=normErgebnis(v);
+      const el=rEl.querySelector('[data-f="'+f+'"]'); if(!el) return;
+      if(el.type==='number') v=numForInput(v);
+      if(v==='') return;
+      el.value=v; el.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    imported++;
+  });
+  if(imported===0){ addRow(); throw new Error('Tabellenkopf erkannt, aber keine gültigen Strecken-Datenzeilen.'); }
+  runCheck();
+  return imported;
+}
+
+/* SheetJS bei Bedarf nachladen (für Excel) */
+let _sheetjs=null;
+function loadSheetJS(){
+  if(window.XLSX) return Promise.resolve();
+  if(_sheetjs) return _sheetjs;
+  _sheetjs=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=()=>res(); s.onerror=()=>rej(new Error('Excel-Bibliothek konnte nicht geladen werden — bitte Internet prüfen oder CSV verwenden.'));
+    document.head.appendChild(s);
+  });
+  return _sheetjs;
+}
+
+function setStatus(msg,kind){
+  const el=document.getElementById('importStatus'); if(!el) return;
+  el.textContent=msg; el.className='import-status'+(kind?(' s-'+kind):'');
+}
+function finishImport(matrix){
+  try{
+    const n=importMatrix(matrix);
+    setStatus('✓ '+n+' Strecke(n) ausgelesen, übertragen und bewertet.','ok');
+    document.getElementById('resultPanel').scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(e){ setStatus('⚠ '+e.message,'nok'); }
+}
+function handleFile(file){
+  if(!file) return;
+  const name=(file.name||'').toLowerCase();
+  setStatus('⏳ „'+(file.name||'Datei')+'" wird ausgelesen …','busy');
+  if(name.endsWith('.csv')||file.type==='text/csv'){
+    file.text().then(txt=> finishImport(csvToMatrix(txt)))
+      .catch(()=> setStatus('⚠ Datei konnte nicht gelesen werden.','nok'));
+  } else if(name.endsWith('.xlsx')||name.endsWith('.xls')){
+    loadSheetJS().then(()=>{
+      const reader=new FileReader();
+      reader.onload=ev=>{ try{
+        const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const matrix=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+        finishImport(matrix);
+      }catch(err){ setStatus('⚠ Excel-Datei konnte nicht gelesen werden.','nok'); } };
+      reader.onerror=()=> setStatus('⚠ Datei konnte nicht gelesen werden.','nok');
+      reader.readAsArrayBuffer(file);
+    }).catch(err=> setStatus('⚠ '+err.message,'nok'));
+  } else {
+    setStatus('⚠ Bitte eine CSV- oder Excel-Datei (.csv/.xlsx/.xls) hochladen.','nok');
+  }
+}
+
+/* CSV-Vorlage erzeugen (deutsches Excel: ; -Trennung, Komma-Dezimal, BOM) */
+function downloadTemplate(){
+  const headers=['Projektname/ID','MFG Bereich','Feederkette','Datum','Name des Monteurs','Firma','Anfangsknoten','Endknoten','Länge der Trasse (m)','Prüfdruck (bar)','Röhrchenreinigung/Schmierung','verwendetes Schmiermittel','verwendetes Kaliber','Kalibrierdruck (bar)','Kalibrierzeit (min)','Prüfergebnis','Bemerkungen'];
+  const r1=['AGF-2026-0815','MFG Nord 4','FK-12-Süd','01.06.2026','Max Mustermann','Tiefbau Müller GmbH','K-104','K-118','540','4','Durchgeführt','MJL 240','Sondenkaliber ⌀3,2mm','3,5','2,4','Röhrchen durchgängig',''];
+  const r2=['AGF-2026-0815','MFG Nord 4','FK-12-Süd','01.06.2026','Max Mustermann','Tiefbau Müller GmbH','K-118','K-130','420','4','Durchgeführt','MJL 240','Sondenkaliber ⌀3,2mm','3,5','1,8','Röhrchen durchgängig',''];
+  const esc=c=>/[;"\n]/.test(c)?'"'+String(c).replace(/"/g,'""')+'"':c;
+  const csv=[headers,r1,r2].map(row=>row.map(esc).join(';')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='AGF_Kalibrierprotokoll_Vorlage.csv'; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+/* Drag & Drop + Klick verkabeln */
+function setupUpload(){
+  const dz=document.getElementById('dropzone'), fi=document.getElementById('fileInput');
+  if(!dz||!fi) return;
+  dz.addEventListener('click',()=>fi.click());
+  dz.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fi.click(); }});
+  fi.addEventListener('change',()=>{ if(fi.files[0]){ handleFile(fi.files[0]); fi.value=''; }});
+  ['dragenter','dragover'].forEach(ev=> dz.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.add('drag'); }));
+  ['dragleave','dragend'].forEach(ev=> dz.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag'); }));
+  dz.addEventListener('drop',e=>{ e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag');
+    const f=e.dataTransfer && e.dataTransfer.files[0]; if(f) handleFile(f); });
+  // Verhindern, dass ein versehentliches Ablegen neben der Zone die Seite ersetzt
+  window.addEventListener('dragover',e=>e.preventDefault());
+  window.addEventListener('drop',e=>{ if(!dz.contains(e.target)) e.preventDefault(); });
+}
+
 /* ===== iOS Home-Screen-Icon (für „Zum Home-Bildschirm") aus dem Logo erzeugen ===== */
 const LOGO_PATH = 'M24 1C22.835 1 21.795 1.734 21.148 3.013L1.594 41.656C0.975 42.88 0.974 44.157 1.591 45.161C2.202 46.154 3.324 46.728 4.676 46.741L43.324 46.741C44.676 46.728 45.798 46.154 46.408 45.162C47.025 44.158 47.024 42.88 46.405 41.656L40.114 29.224C39.108 27.235 36.668 25.735 34.437 25.735L34.436 25.735L23.989 25.738C23.014 25.738 22.223 26.53 22.223 27.505C22.224 28.48 23.014 29.271 23.99 29.271L23.99 29.271L34.437 29.267L34.438 29.267C35.332 29.267 36.559 30.021 36.963 30.819L43.232 43.209L4.768 43.209L24 5.201L30.894 18.826C31.205 19.441 31.827 19.795 32.472 19.795C32.74 19.795 33.012 19.734 33.267 19.605C34.138 19.164 34.486 18.102 34.046 17.231L26.852 3.013C26.204 1.734 25.165 1 24 1Z';
 function buildTouchIcon(){
@@ -649,6 +959,7 @@ function buildTouchIcon(){
   selectDim('74');
   addRow();
   buildTouchIcon();
+  setupUpload();
 })();
 </script>
 </body>
